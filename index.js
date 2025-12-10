@@ -35,7 +35,7 @@ async function run() {
         res.send(result);
     });
     app.get('/issues/all', async (req, res) => {
-        const result =  await issuesCollection.find().toArray();
+        const result =  await issuesCollection.find({}, { sort: { priority: -1 } }).toArray();
         res.send(result);
     });
     app.get('/issues/:id', async (req, res)=>{
@@ -82,7 +82,7 @@ async function run() {
           currency: 'USD',
           unit_amount: amount,
           product_data: {
-            name: paymentInfo.title,
+            name: `Issue boosting for Issue : ${paymentInfo.title}`,
           },
         },
         quantity: 1,
@@ -94,10 +94,26 @@ async function run() {
       issueId: paymentInfo.issueId,
 
     },
-    success_url: `${process.env.SITE_DOMAIN}/issues/${paymentInfo.issueId}?payment=success`,
+    success_url: `${process.env.SITE_DOMAIN}/issues/${paymentInfo.issueId}?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${process.env.SITE_DOMAIN}/issues/${paymentInfo.issueId}?payment=failed`,
   });
       res.send({url: session.url});
+    });
+    app.patch('/payment-success', async (req, res) =>{
+      const sessionId = req.query.session_id;
+      const session = await stripe.checkout.sessions.retrieve(sessionId);
+      if(session.payment_status === 'paid'){
+        const issueId = session.metadata.issueId;
+        const query = {_id: new ObjectId(issueId)};
+        const update = {
+          $set: {
+            paymentStatus : 'paid',
+            priority: 'High'
+          }
+        }
+        const result = await issuesCollection.updateOne(query, update);
+        res.send(result);
+      }
     });
 
     // Send a ping to confirm a successful connection
