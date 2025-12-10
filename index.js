@@ -1,7 +1,8 @@
+require('dotenv').config()
 const express = require('express')
 const cors = require('cors')
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const app = express()
-require('dotenv').config()
 const port = process.env.PORT || 3000
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 
@@ -70,7 +71,34 @@ async function run() {
       const result = await issuesCollection.updateOne({_id: objectId}, update);
       res.send(result);
     })
+// payment api
+    app.post('/create-payment-intent', async (req, res) => {
+      const paymentInfo = req.body;
+      const amount = 79; 
+      const session = await stripe.checkout.sessions.create({
+    line_items: [
+      {
+        price_data: {
+          currency: 'USD',
+          unit_amount: amount,
+          product_data: {
+            name: paymentInfo.title,
+          },
+        },
+        quantity: 1,
+      },
+    ],
+    customer_email: paymentInfo.reporterEmail,
+    mode: 'payment',
+    metadata: {
+      issueId: paymentInfo.issueId,
 
+    },
+    success_url: `${process.env.SITE_DOMAIN}/issues/${paymentInfo.issueId}?payment=success`,
+    cancel_url: `${process.env.SITE_DOMAIN}/issues/${paymentInfo.issueId}?payment=failed`,
+  });
+      res.send({url: session.url});
+    });
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
