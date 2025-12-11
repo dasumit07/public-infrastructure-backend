@@ -4,11 +4,34 @@ const cors = require('cors')
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const app = express()
 const port = process.env.PORT || 3000
+const admin = require("firebase-admin");
+
+const serviceAccount = require("./issue-reporting-system-firebase-adminsdk.json");
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount)
+});
+
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 
 // middleware
 app.use(express.json())
 app.use(cors())
+
+const verifyFBToken = async(req, res, next) => {
+  const token = req.headers.authorization;
+  if(!token){
+    return res.status(401).send({message: 'unauthorized access'})
+  }
+  try {
+    const idToken = token.split(' ')[1];
+    const decoded = await admin.auth().verifyIdToken(idToken);
+    req.decoded_email = decoded.email
+  } catch (error) {
+    return res.status(401).send({message: 'unauthorized access'})
+  }
+  next();
+}
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASSWORD}@cluster0.kfapxri.mongodb.net/?appName=Cluster0`;
 
@@ -36,7 +59,7 @@ async function run() {
     app.post('/issues', async (req, res) => {
       const issue = req.body;
       issue.trackingId = generateTrackingId();
-      issue.priority = "Normal"; 
+      issue.priority = "Normal";
       issue.paymentStatus = "unpaid";
       const result = await issuesCollection.insertOne(issue);
       res.send(result);
@@ -113,7 +136,7 @@ async function run() {
       const session = await stripe.checkout.sessions.retrieve(sessionId);
 
       const transactionId = session.payment_intent;
-      const query = {transactionId: transactionId};
+      const query = { transactionId: transactionId };
       const paymentExits = await paymentsCollection.findOne(query);
 
       if (session.payment_status === 'paid' && !paymentExits) {
@@ -143,8 +166,13 @@ async function run() {
         }
       }
     });
-    app.get('/all-payments', async(req, res) =>{
-      const result = await paymentsCollection.find({}, { sort: { paidAt: -1 } }).toArray();
+    app.get('/all-payments', verifyFBToken, async (req, res) => {
+      // admin email
+      const adminEmail = 'sd3034734@gmail.com';
+      if(req.decoded_email !== adminEmail){
+        return res.status(403).send({message: ' access'})
+      }
+      const result = await paymentsCollection.find().sort({ paidAt: -1 }).toArray();
       res.send(result);
     })
 
