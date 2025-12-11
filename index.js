@@ -6,7 +6,7 @@ const app = express()
 const port = process.env.PORT || 3000
 const admin = require("firebase-admin");
 
-const serviceAccount = require("./issue-reporting-system-firebase-adminsdk.json");
+const serviceAccount = require("./issue-reporting-system--firebase-admin.json");
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)
