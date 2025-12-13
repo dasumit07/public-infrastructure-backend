@@ -18,17 +18,17 @@ const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 app.use(express.json())
 app.use(cors())
 
-const verifyFBToken = async(req, res, next) => {
+const verifyFBToken = async (req, res, next) => {
   const token = req.headers.authorization;
-  if(!token){
-    return res.status(401).send({message: 'unauthorized access'})
+  if (!token) {
+    return res.status(401).send({ message: 'unauthorized access' })
   }
   try {
     const idToken = token.split(' ')[1];
     const decoded = await admin.auth().verifyIdToken(idToken);
     req.decoded_email = decoded.email
   } catch (error) {
-    return res.status(401).send({message: 'unauthorized access'})
+    return res.status(401).send({ message: 'unauthorized access' })
   }
   next();
 }
@@ -55,6 +55,51 @@ async function run() {
     const db = client.db("issue_reporting_system");
     const issuesCollection = db.collection("issues");
     const paymentsCollection = db.collection("payments");
+    const userCollection = db.collection("users");
+    const staffCollection = db.collection("staff");
+
+    // users api
+    app.post('/users', async (req, res) => {
+      const user = req.body;
+      user.role = 'user';
+      user.createdAt = new Date();
+      const userExits = await userCollection.findOne({ email: user.email });
+      if (userExits) {
+        return res.send({ message: 'user exits' });
+      };
+      const result = await userCollection.insertOne(user);
+      res.send(result);
+    })
+    
+
+    // staff api
+    app.post('/staff', async (req, res) => {
+      const staff = req.body;
+      staff.role = 'staff';
+      staff.createdAt = new Date();
+      const result = await staffCollection.insertOne(staff);
+      res.send(result);
+    });
+    app.get('/staffs', async (req, res) => {
+      const result = await staffCollection.find({}, { sort: { createdAt: -1 } }).toArray();
+      res.send(result);
+    });
+    app.put('/staff/:id', async (req, res) => {
+      const { id } = req.params;
+      const data = req.body;
+      const objectId = new ObjectId(id);
+      const update = {
+        $set: data
+      }
+      const result = await staffCollection.updateOne({ _id: objectId }, update);
+      res.send(result);
+    })
+    app.delete('/staff/:id', async (req, res) => {
+      const { id } = req.params;
+      const objectId = new ObjectId(id);
+      const result = await staffCollection.deleteOne({ _id: objectId });
+      res.send(result);
+    })
     // issue api
     app.post('/issues', async (req, res) => {
       const issue = req.body;
@@ -169,8 +214,8 @@ async function run() {
     app.get('/all-payments', verifyFBToken, async (req, res) => {
       // admin email
       const adminEmail = 'sd3034734@gmail.com';
-      if(req.decoded_email !== adminEmail){
-        return res.status(403).send({message: ' access'})
+      if (req.decoded_email !== adminEmail) {
+        return res.status(403).send({ message: ' access' })
       }
       const result = await paymentsCollection.find().sort({ paidAt: -1 }).toArray();
       res.send(result);
